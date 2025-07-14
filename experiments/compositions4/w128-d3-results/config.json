@@ -1,0 +1,1 @@
+{"n": 64, "width": 128, "depth": 3, "activation": "ReLU", "layernorm": false, "samples_per_task": 2000, "steps": 200000, "lr": 0.001, "device": "cuda", "dtype": "float32", "seed": 0, "save_dir": "w128-d3-results", "verbose": false, "wandb_project": null, "codes": "[[0],[1],[2],[3],[0,1,2,3]]"}

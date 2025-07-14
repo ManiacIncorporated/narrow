@@ -426,7 +426,7 @@ def main() -> None:
     os.makedirs("./psych-llm/logs", exist_ok=True)
     
     # Launch jobs for each sparsity configuration
-    neuron_sparsity, residual_sparsity = *sparsity_configs[0]
+    neuron_sparsity, residual_sparsity = sparsity_configs[0]
     # Create a unique name for this configuration
     config_name = f"n{neuron_sparsity:.2f}_r{residual_sparsity:.2f}"
     
@@ -437,7 +437,7 @@ def main() -> None:
     # Format the script with all parameters
     args = {
         'model_name': model_name,
-        'dataset_name': 'BoltMonkey/psychology-question-answer'
+        'dataset_name': 'BoltMonkey/psychology-question-answer',
         'neuron_sparsity': neuron_sparsity,
         'residual_sparsity': residual_sparsity,
         'output_dir': output_dir,
@@ -549,14 +549,14 @@ def main() -> None:
     eval_dataset = None
     if args['eval']:
         print("Preparing evaluation data...")
-        if args['streaming:
+        if args['streaming']:
             eval_dataset = load_dataset(
                 args['dataset_name'], 
                 split="train", 
                 languages=['Python'], 
                 streaming=True
             )
-            if args['eval_skip > 0:
+            if args['eval_skip'] > 0:
                 eval_dataset = eval_dataset.skip(args['eval_skip'])
             eval_dataset = eval_dataset.take(args['eval_samples'])
         else:

@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 
-import wandb
+#import wandb
 
 def get_batch(
     n_tasks: int,
