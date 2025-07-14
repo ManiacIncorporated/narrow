@@ -72,14 +72,14 @@ def prepare_data(
         A DataLoader yielding batches suitable for language modeling.
     """
     if streaming:
-        dataset = load_dataset(dataset_name, split=split, languages=['Python'], streaming=True)
+        dataset = load_dataset(dataset_name, split=split, streaming=True)
         if skip_samples > 0:
             dataset = dataset.skip(skip_samples)
         dataset = dataset.take(num_samples)
         # Convert streaming dataset to a list to allow tokenization.
         dataset = list(dataset)
     else:
-        dataset = load_dataset(dataset_name, split=split, languages=['Python'])
+        dataset = load_dataset(dataset_name, split=split)
         # For non-streaming, we assume random access is available.
         dataset = dataset.select(range(skip_samples, skip_samples + num_samples))
 
@@ -90,7 +90,7 @@ def prepare_data(
     def tokenize_function(examples):
         # Assumes the field "code" holds the text; adjust as necessary.
         return tokenizer(
-            examples["code"],
+            examples["answer"],
             truncation=True,
             max_length=max_length,
         )
@@ -413,7 +413,7 @@ def main() -> None:
         "prune_samples": 1024,
         "train_skip": 1024,
         "max_steps": 20000,
-        "lr": "5e-5",
+        "lr": 5e-5,
         "mask_steps": 1,
         "eval_steps": 500,
         "save_steps": 2500,
@@ -454,6 +454,11 @@ def main() -> None:
         'limit_checkpoints': training_params["limit_checkpoints"],
         'logging_steps': training_params["logging_steps"],
         'warmup_steps': training_params["warmup_steps"],
+        'streaming': True,
+        'prune_skip': 0,
+        'eval': True,
+        'eval_skip': 2,
+        'eval_samples': 1024
     }
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -517,7 +522,6 @@ def main() -> None:
         train_dataset = load_dataset(
             args['dataset_name'], 
             split="train", 
-            languages=['Python'], 
             streaming=True
         )
         if args['train_skip'] > 0:
@@ -526,15 +530,14 @@ def main() -> None:
     else:
         train_dataset = load_dataset(
             args['dataset_name'], 
-            split="train", 
-            languages=['Python']
+            split="train"
         )
         train_dataset = train_dataset.select(range(args['train_skip'], args['train_skip'] + args['batch_size'] * args['max_steps'] * args['accumulations']))
     
     # Tokenize the training dataset
     def tokenize_function(examples):
         return tokenizer(
-            examples["code"],
+            examples["answer"],
             truncation=True,
             max_length=args['max_length'],
         )
@@ -553,7 +556,6 @@ def main() -> None:
             eval_dataset = load_dataset(
                 args['dataset_name'], 
                 split="train", 
-                languages=['Python'], 
                 streaming=True
             )
             if args['eval_skip'] > 0:
@@ -562,8 +564,7 @@ def main() -> None:
         else:
             eval_dataset = load_dataset(
                 args['dataset_name'], 
-                split="train", 
-                languages=['Python']
+                split="train" 
             )
             eval_dataset = eval_dataset.select(range(args['eval_skip'], args['eval_skip'] + args['eval_samples']))
         
@@ -589,7 +590,7 @@ def main() -> None:
         warmup_steps=args['warmup_steps'],
         logging_dir=os.path.join(args['output_dir'], "logs"),
         logging_steps=args['logging_steps'],
-        evaluation_strategy="steps" if tokenized_eval else "no",
+        eval_strategy="steps" if tokenized_eval else "no",
         eval_steps=args['eval_steps'] if tokenized_eval else None,
         save_strategy="steps",
         save_steps=args['save_steps'],
