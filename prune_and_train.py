@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 # os.environ['HF_HOME'] = '/om/user/ericjm/.cache/huggingface'
-os.environ['HF_HOME'] = os.environ.get('SCRATCH') + '/iaifi_lab/Lab/ericjm/.cache/huggingface'
+# os.environ['HF_HOME'] = os.environ.get('SCRATCH') + '/iaifi_lab/Lab/ericjm/.cache/huggingface'
 from collections.abc import Mapping
 from collections import defaultdict
 from typing import Any, Dict, Tuple, Union
@@ -28,7 +28,6 @@ from transformers import (
     AutoModelForCausalLM,
     DataCollatorForLanguageModeling,
 )
-
 
 def move_to_device(data: Any, device: torch.device) -> Any:
     """
@@ -335,7 +334,7 @@ def parse_args() -> argparse.Namespace:
     # Model and dataset parameters
     parser.add_argument("--model_name", type=str, default="NousResearch/Llama-3.2-1B",
                         help="Pretrained model name or path.")
-    parser.add_argument("--dataset_name", type=str, default="codeparrot/github-code",
+    parser.add_argument("--dataset_name", type=str, default="BoltMonkey/psychology-question-answer",
                         help="Dataset name for pruning and training.")
     parser.add_argument("--max_length", type=int, default=512, help="Maximum sequence length.")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size for data loading.")
@@ -390,16 +389,81 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    args = parse_args()
+    
+    # args = parse_args()
+
+    ##### DT 7/14: Manually define parameters; ignore argparse as we are not slurming
+    # Base model to use
+    model_name = "NousResearch/Llama-3.2-1B"
+    # Define specific combinations of (neuron_sparsity, residual_sparsity)
+    sparsity_configs = [
+        # (0.5, 0.2),
+        (0.5, 0.5),
+        (0.8, 0.5),
+        (0.9, 0.5),
+        (0.95, 0.5),
+        (0.8, 0.8),
+        (0.9, 0.9),
+    ]
+    # Common training parameters
+    training_params = {
+        "max_length": 1024,
+        "batch_size": 8,
+        "accumulations": 8,
+        "prune_samples": 1024,
+        "train_skip": 1024,
+        "max_steps": 20000,
+        "lr": "5e-5",
+        "mask_steps": 1,
+        "eval_steps": 500,
+        "save_steps": 2500,
+        "limit_checkpoints": 3,
+        "logging_steps": 5,
+        "warmup_steps": 1000,
+    }
+
+    # Create logs directory
+    os.makedirs("./psych-llm/logs", exist_ok=True)
+    
+    # Launch jobs for each sparsity configuration
+    neuron_sparsity, residual_sparsity = *sparsity_configs[0]
+    # Create a unique name for this configuration
+    config_name = f"n{neuron_sparsity:.2f}_r{residual_sparsity:.2f}"
+    
+    # Create output directory
+    output_dir = f'./psych-llm/{config_name}'
+    os.makedirs(output_dir)
+    
+    # Format the script with all parameters
+    args = {
+        'model_name': model_name,
+        'dataset_name': 'BoltMonkey/psychology-question-answer'
+        'neuron_sparsity': neuron_sparsity,
+        'residual_sparsity': residual_sparsity,
+        'output_dir': output_dir,
+        'max_length': training_params["max_length"],
+        'batch_size': training_params["batch_size"],
+        'accumulations': training_params["accumulations"],
+        'prune_samples': training_params["prune_samples"],
+        'train_skip': training_params["train_skip"],
+        'max_steps': training_params["max_steps"],
+        'lr': training_params["lr"],
+        'mask_steps': training_params["mask_steps"],
+        'eval_steps': training_params["eval_steps"],
+        'save_steps': training_params["save_steps"],
+        'limit_checkpoints': training_params["limit_checkpoints"],
+        'logging_steps': training_params["logging_steps"],
+        'warmup_steps': training_params["warmup_steps"],
+    }
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args['output_dir'], exist_ok=True)
     
-    print(f"Loading model: {args.model_name}")
+    print(f"Loading model: {args['model_name']}")
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
+        args['model_name'],
         torch_dtype=torch.float32,
         device_map=str(device)
     )
@@ -409,70 +473,70 @@ def main() -> None:
     # Load pruning data
     print("Preparing pruning data...")
     pruning_dataloader = prepare_data(
-        dataset_name=args.dataset_name,
-        model_name=args.model_name,
-        max_length=args.max_length,
-        batch_size=args.batch_size,
-        num_samples=args.prune_samples,
+        dataset_name=args['dataset_name'],
+        model_name=args['model_name'],
+        max_length=args['max_length'],
+        batch_size=args['batch_size'],
+        num_samples=args['prune_samples'],
         split="train",
-        streaming=args.streaming,
-        skip_samples=args.prune_skip
+        streaming=args['streaming'],
+        skip_samples=args['prune_skip']
     )
     
     # Create mask based on attribution scores
     print("Creating pruning mask based on attribution scores...")
-    num_attribution_batches = args.prune_samples // args.batch_size
+    num_attribution_batches = args['prune_samples'] // args['batch_size']
     mask, pruning_stats = mask_by_gradient_attribution(
         model=model,
         dataloader=pruning_dataloader,
-        neuron_sparsity=args.neuron_sparsity,
-        residual_sparsity=args.residual_sparsity,
+        neuron_sparsity=args['neuron_sparsity'],
+        residual_sparsity=args['residual_sparsity'],
         num_attribution_batches=num_attribution_batches,
-        output_dir=args.output_dir
+        output_dir=args['output_dir']
     )
     
     # Save initial pruning statistics
-    pruning_stats_file = os.path.join(args.output_dir, "pruning_stats.json")
+    pruning_stats_file = os.path.join(args['output_dir'], "pruning_stats.json")
     with open(pruning_stats_file, "w") as f:
         json.dump(pruning_stats, f, indent=4)
     print(f"Pruning statistics saved to {pruning_stats_file}")
     # save mask as a torch file
-    mask_file = os.path.join(args.output_dir, "pruning_mask.pt")
+    mask_file = os.path.join(args['output_dir'], "pruning_mask.pt")
     torch.save(mask, mask_file)
     
     # ===== STEP 2: TRAINING PHASE =====
     
     # Load tokenizer for training data preparation
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args['model_name'])
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     
     # Load training data
     print("Preparing training data...")
-    if args.streaming:
+    if args['streaming']:
         train_dataset = load_dataset(
-            args.dataset_name, 
+            args['dataset_name'], 
             split="train", 
             languages=['Python'], 
             streaming=True
         )
-        if args.train_skip > 0:
-            train_dataset = train_dataset.skip(args.train_skip)
-        train_dataset = train_dataset.take(args.batch_size * args.max_steps * args.accumulations)
+        if args['train_skip'] > 0:
+            train_dataset = train_dataset.skip(args['train_skip'])
+        train_dataset = train_dataset.take(args['batch_size'] * args['max_steps'] * args['accumulations'])
     else:
         train_dataset = load_dataset(
-            args.dataset_name, 
+            args['dataset_name'], 
             split="train", 
             languages=['Python']
         )
-        train_dataset = train_dataset.select(range(args.train_skip, args.train_skip + args.batch_size * args.max_steps * args.accumulations))
+        train_dataset = train_dataset.select(range(args['train_skip'], args['train_skip'] + args['batch_size'] * args['max_steps'] * args['accumulations']))
     
     # Tokenize the training dataset
     def tokenize_function(examples):
         return tokenizer(
             examples["code"],
             truncation=True,
-            max_length=args.max_length,
+            max_length=args['max_length'],
         )
     
     tokenized_train = train_dataset.map(
@@ -483,25 +547,25 @@ def main() -> None:
     
     # Load evaluation data if needed
     eval_dataset = None
-    if args.eval:
+    if args['eval']:
         print("Preparing evaluation data...")
-        if args.streaming:
+        if args['streaming:
             eval_dataset = load_dataset(
-                args.dataset_name, 
+                args['dataset_name'], 
                 split="train", 
                 languages=['Python'], 
                 streaming=True
             )
-            if args.eval_skip > 0:
-                eval_dataset = eval_dataset.skip(args.eval_skip)
-            eval_dataset = eval_dataset.take(args.eval_samples)
+            if args['eval_skip > 0:
+                eval_dataset = eval_dataset.skip(args['eval_skip'])
+            eval_dataset = eval_dataset.take(args['eval_samples'])
         else:
             eval_dataset = load_dataset(
-                args.dataset_name, 
+                args['dataset_name'], 
                 split="train", 
                 languages=['Python']
             )
-            eval_dataset = eval_dataset.select(range(args.eval_skip, args.eval_skip + args.eval_samples))
+            eval_dataset = eval_dataset.select(range(args['eval_skip'], args['eval_skip'] + args['eval_samples']))
         
         tokenized_eval = eval_dataset.map(
             tokenize_function,
@@ -516,20 +580,20 @@ def main() -> None:
     
     # Set up training arguments
     training_args = TrainingArguments(
-        output_dir=args.output_dir,
-        max_steps=args.max_steps if args.max_steps > 0 else -1,
-        per_device_train_batch_size=args.batch_size,
-        per_device_eval_batch_size=args.batch_size,
-        gradient_accumulation_steps=args.accumulations,
-        learning_rate=args.lr,
-        warmup_steps=args.warmup_steps,
-        logging_dir=os.path.join(args.output_dir, "logs"),
-        logging_steps=args.logging_steps,
+        output_dir=args['output_dir'],
+        max_steps=args['max_steps'] if args['max_steps'] > 0 else -1,
+        per_device_train_batch_size=args['batch_size'],
+        per_device_eval_batch_size=args['batch_size'],
+        gradient_accumulation_steps=args['accumulations'],
+        learning_rate=args['lr'],
+        warmup_steps=args['warmup_steps'],
+        logging_dir=os.path.join(args['output_dir'], "logs"),
+        logging_steps=args['logging_steps'],
         evaluation_strategy="steps" if tokenized_eval else "no",
-        eval_steps=args.eval_steps if tokenized_eval else None,
+        eval_steps=args['eval_steps'] if tokenized_eval else None,
         save_strategy="steps",
-        save_steps=args.save_steps,
-        save_total_limit=args.limit_checkpoints,
+        save_steps=args['save_steps'],
+        save_total_limit=args['limit_checkpoints'],
         load_best_model_at_end=tokenized_eval is not None,
         bf16=True if torch.cuda.is_available() else False,
         optim="adamw_torch_fused",
@@ -546,7 +610,7 @@ def main() -> None:
         data_collator=data_collator,
         tokenizer=tokenizer,
         mask=mask,
-        mask_steps=args.mask_steps,
+        mask_steps=args['mask_steps'],
     )
     
     # Train the model while maintaining the pruned structure
@@ -554,22 +618,22 @@ def main() -> None:
     trainer.train()
     
     # Save the final model
-    trainer.save_model(os.path.join(args.output_dir, "final_model"))
-    tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
-    print(f"Final model saved to {os.path.join(args.output_dir, 'final_model')}")
+    trainer.save_model(os.path.join(args['output_dir'], "final_model"))
+    tokenizer.save_pretrained(os.path.join(args['output_dir'], "final_model"))
+    print(f"Final model saved to {os.path.join(args['output_dir'], 'final_model')}")
     
     # Evaluate the final model if requested
-    if args.eval:
+    if args['eval']:
         print("Evaluating final model...")
         eval_dataloader = DataLoader(
             tokenized_eval, 
-            batch_size=args.batch_size, 
+            batch_size=args['batch_size'], 
             collate_fn=data_collator
         )
         eval_stats = evaluate_model(model, eval_dataloader, device)
         
         # Save evaluation results
-        eval_file = os.path.join(args.output_dir, "final_evaluation_results.json")
+        eval_file = os.path.join(args['output_dir'], "final_evaluation_results.json")
         with open(eval_file, "w") as f:
             json.dump(eval_stats, f, indent=4)
         print(f"Final evaluation results saved to {eval_file}")
