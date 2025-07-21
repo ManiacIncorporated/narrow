@@ -64,6 +64,13 @@ def main(data: str = None, model_path: str = None, scores_path: str = None) -> N
         tokens_in = tokenizer(raw_prompts, padding=True, return_tensors='pt').to(device)
         tokens_out = model.generate(**tokens_in, generation_config = generation_config)
         raw_model_response = tokenizer.batch_decode(tokens_out, skip_special_tokens=True)
+        # Extract only the answer after 'A:' for each output
+        def extract_answer(text):
+            idx = text.find('A:')
+            if idx == -1:
+                return text.strip()
+            return text[idx+2:].strip()
+        raw_model_response = [extract_answer(out) for out in raw_model_response]
         del raw_prompts; del tokens_in; del tokens_out
    
         # Re-tokenize with pretrained BLEURT and score
@@ -80,6 +87,7 @@ def main(data: str = None, model_path: str = None, scores_path: str = None) -> N
 
 if __name__ == "__main__":
     dataset_name = "BoltMonkey/psychology-question-answer"
-    model_path = "./../n0.50_r0.50/final_model/"
-    scores_path = "./scores.pkl"
+    expt_path = "./../n0.50_r0.50/"
+    model_path = f"{expt_path}final_model/"
+    scores_path = f"{expt_path}scores.pkl"
     main(data=dataset_name, model_path=model_path, scores_path=scores_path)

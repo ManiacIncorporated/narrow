@@ -1,0 +1,576 @@
+{
+    "orig_num_parameters": 1235814400,
+    "orig_num_bytes": 2471628800,
+    "pruned_num_parameters": 1235814400,
+    "pruned_num_bytes": 2471628800,
+    "memory_compression_ratio": 1.0,
+    "parameter_compression_ratio": 1.0,
+    "fraction_removed": 0.6629189647857445,
+    "layerwise_sparsity": {
+        "model.embed_tokens.weight": {
+            "nonzero": 131334144,
+            "total": 262668288,
+            "sparsity": 0.5
+        },
+        "model.layers.0.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.0.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.0.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.0.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.0.mlp.gate_proj.weight": {
+            "nonzero": 5540864,
+            "total": 16777216,
+            "sparsity": 0.66973876953125
+        },
+        "model.layers.0.mlp.up_proj.weight": {
+            "nonzero": 5540864,
+            "total": 16777216,
+            "sparsity": 0.66973876953125
+        },
+        "model.layers.0.mlp.down_proj.weight": {
+            "nonzero": 5540864,
+            "total": 16777216,
+            "sparsity": 0.66973876953125
+        },
+        "model.layers.1.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.1.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.1.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.1.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.1.mlp.gate_proj.weight": {
+            "nonzero": 5161984,
+            "total": 16777216,
+            "sparsity": 0.69232177734375
+        },
+        "model.layers.1.mlp.up_proj.weight": {
+            "nonzero": 5161984,
+            "total": 16777216,
+            "sparsity": 0.69232177734375
+        },
+        "model.layers.1.mlp.down_proj.weight": {
+            "nonzero": 5161984,
+            "total": 16777216,
+            "sparsity": 0.69232177734375
+        },
+        "model.layers.2.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.2.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.2.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.2.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.2.mlp.gate_proj.weight": {
+            "nonzero": 4900864,
+            "total": 16777216,
+            "sparsity": 0.7078857421875
+        },
+        "model.layers.2.mlp.up_proj.weight": {
+            "nonzero": 4900864,
+            "total": 16777216,
+            "sparsity": 0.7078857421875
+        },
+        "model.layers.2.mlp.down_proj.weight": {
+            "nonzero": 4900864,
+            "total": 16777216,
+            "sparsity": 0.7078857421875
+        },
+        "model.layers.3.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.3.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.3.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.3.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.3.mlp.gate_proj.weight": {
+            "nonzero": 4261888,
+            "total": 16777216,
+            "sparsity": 0.7459716796875
+        },
+        "model.layers.3.mlp.up_proj.weight": {
+            "nonzero": 4261888,
+            "total": 16777216,
+            "sparsity": 0.7459716796875
+        },
+        "model.layers.3.mlp.down_proj.weight": {
+            "nonzero": 4261888,
+            "total": 16777216,
+            "sparsity": 0.7459716796875
+        },
+        "model.layers.4.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.4.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.4.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.4.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.4.mlp.gate_proj.weight": {
+            "nonzero": 4468736,
+            "total": 16777216,
+            "sparsity": 0.733642578125
+        },
+        "model.layers.4.mlp.up_proj.weight": {
+            "nonzero": 4468736,
+            "total": 16777216,
+            "sparsity": 0.733642578125
+        },
+        "model.layers.4.mlp.down_proj.weight": {
+            "nonzero": 4468736,
+            "total": 16777216,
+            "sparsity": 0.733642578125
+        },
+        "model.layers.5.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.5.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.5.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.5.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.5.mlp.gate_proj.weight": {
+            "nonzero": 4071424,
+            "total": 16777216,
+            "sparsity": 0.75732421875
+        },
+        "model.layers.5.mlp.up_proj.weight": {
+            "nonzero": 4071424,
+            "total": 16777216,
+            "sparsity": 0.75732421875
+        },
+        "model.layers.5.mlp.down_proj.weight": {
+            "nonzero": 4071424,
+            "total": 16777216,
+            "sparsity": 0.75732421875
+        },
+        "model.layers.6.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.6.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.6.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.6.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.6.mlp.gate_proj.weight": {
+            "nonzero": 3673088,
+            "total": 16777216,
+            "sparsity": 0.78106689453125
+        },
+        "model.layers.6.mlp.up_proj.weight": {
+            "nonzero": 3673088,
+            "total": 16777216,
+            "sparsity": 0.78106689453125
+        },
+        "model.layers.6.mlp.down_proj.weight": {
+            "nonzero": 3673088,
+            "total": 16777216,
+            "sparsity": 0.78106689453125
+        },
+        "model.layers.7.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.7.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.7.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.7.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.7.mlp.gate_proj.weight": {
+            "nonzero": 4102144,
+            "total": 16777216,
+            "sparsity": 0.7554931640625
+        },
+        "model.layers.7.mlp.up_proj.weight": {
+            "nonzero": 4102144,
+            "total": 16777216,
+            "sparsity": 0.7554931640625
+        },
+        "model.layers.7.mlp.down_proj.weight": {
+            "nonzero": 4102144,
+            "total": 16777216,
+            "sparsity": 0.7554931640625
+        },
+        "model.layers.8.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.8.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.8.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.8.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.8.mlp.gate_proj.weight": {
+            "nonzero": 4482048,
+            "total": 16777216,
+            "sparsity": 0.73284912109375
+        },
+        "model.layers.8.mlp.up_proj.weight": {
+            "nonzero": 4482048,
+            "total": 16777216,
+            "sparsity": 0.73284912109375
+        },
+        "model.layers.8.mlp.down_proj.weight": {
+            "nonzero": 4482048,
+            "total": 16777216,
+            "sparsity": 0.73284912109375
+        },
+        "model.layers.9.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.9.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.9.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.9.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.9.mlp.gate_proj.weight": {
+            "nonzero": 4820992,
+            "total": 16777216,
+            "sparsity": 0.712646484375
+        },
+        "model.layers.9.mlp.up_proj.weight": {
+            "nonzero": 4820992,
+            "total": 16777216,
+            "sparsity": 0.712646484375
+        },
+        "model.layers.9.mlp.down_proj.weight": {
+            "nonzero": 4820992,
+            "total": 16777216,
+            "sparsity": 0.712646484375
+        },
+        "model.layers.10.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.10.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.10.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.10.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.10.mlp.gate_proj.weight": {
+            "nonzero": 4678656,
+            "total": 16777216,
+            "sparsity": 0.72113037109375
+        },
+        "model.layers.10.mlp.up_proj.weight": {
+            "nonzero": 4678656,
+            "total": 16777216,
+            "sparsity": 0.72113037109375
+        },
+        "model.layers.10.mlp.down_proj.weight": {
+            "nonzero": 4678656,
+            "total": 16777216,
+            "sparsity": 0.72113037109375
+        },
+        "model.layers.11.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.11.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.11.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.11.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.11.mlp.gate_proj.weight": {
+            "nonzero": 4184064,
+            "total": 16777216,
+            "sparsity": 0.7506103515625
+        },
+        "model.layers.11.mlp.up_proj.weight": {
+            "nonzero": 4184064,
+            "total": 16777216,
+            "sparsity": 0.7506103515625
+        },
+        "model.layers.11.mlp.down_proj.weight": {
+            "nonzero": 4184064,
+            "total": 16777216,
+            "sparsity": 0.7506103515625
+        },
+        "model.layers.12.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.12.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.12.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.12.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.12.mlp.gate_proj.weight": {
+            "nonzero": 3545088,
+            "total": 16777216,
+            "sparsity": 0.7886962890625
+        },
+        "model.layers.12.mlp.up_proj.weight": {
+            "nonzero": 3545088,
+            "total": 16777216,
+            "sparsity": 0.7886962890625
+        },
+        "model.layers.12.mlp.down_proj.weight": {
+            "nonzero": 3545088,
+            "total": 16777216,
+            "sparsity": 0.7886962890625
+        },
+        "model.layers.13.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.13.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.13.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.13.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.13.mlp.gate_proj.weight": {
+            "nonzero": 3051520,
+            "total": 16777216,
+            "sparsity": 0.818115234375
+        },
+        "model.layers.13.mlp.up_proj.weight": {
+            "nonzero": 3051520,
+            "total": 16777216,
+            "sparsity": 0.818115234375
+        },
+        "model.layers.13.mlp.down_proj.weight": {
+            "nonzero": 3051520,
+            "total": 16777216,
+            "sparsity": 0.818115234375
+        },
+        "model.layers.14.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.14.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.14.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.14.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.14.mlp.gate_proj.weight": {
+            "nonzero": 2797568,
+            "total": 16777216,
+            "sparsity": 0.833251953125
+        },
+        "model.layers.14.mlp.up_proj.weight": {
+            "nonzero": 2797568,
+            "total": 16777216,
+            "sparsity": 0.833251953125
+        },
+        "model.layers.14.mlp.down_proj.weight": {
+            "nonzero": 2797568,
+            "total": 16777216,
+            "sparsity": 0.833251953125
+        },
+        "model.layers.15.self_attn.q_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.15.self_attn.k_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.15.self_attn.v_proj.weight": {
+            "nonzero": 524288,
+            "total": 1048576,
+            "sparsity": 0.5
+        },
+        "model.layers.15.self_attn.o_proj.weight": {
+            "nonzero": 2097152,
+            "total": 4194304,
+            "sparsity": 0.5
+        },
+        "model.layers.15.mlp.gate_proj.weight": {
+            "nonzero": 3367936,
+            "total": 16777216,
+            "sparsity": 0.79925537109375
+        },
+        "model.layers.15.mlp.up_proj.weight": {
+            "nonzero": 3367936,
+            "total": 16777216,
+            "sparsity": 0.79925537109375
+        },
+        "model.layers.15.mlp.down_proj.weight": {
+            "nonzero": 3367936,
+            "total": 16777216,
+            "sparsity": 0.79925537109375
+        }
+    }
+}

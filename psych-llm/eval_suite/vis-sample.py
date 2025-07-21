@@ -39,7 +39,14 @@ def main() -> None:
         tokens_in = tokenizer(user_in, return_tensors="pt").to(device)
         tokens_out = model.generate(**tokens_in, generation_config = generation_config)
         model_out = tokenizer.decode(tokens_out[0], skip_special_tokens=True)
-        print(model_out+'\n')
+        # Extract only the answer after 'A:'
+        def extract_answer(text):
+            idx = text.find('A:')
+            if idx == -1:
+                return text.strip()
+            return text[idx+2:].strip()
+        answer = extract_answer(model_out)
+        print(answer+'\n')
         user_in = input(">>>")
 
 if __name__ == "__main__":

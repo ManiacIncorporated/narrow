@@ -11,13 +11,12 @@ import os
 from collections.abc import Mapping
 from collections import defaultdict
 from typing import Any, Dict, Tuple, Union
-
+import gc
 from tqdm.auto import tqdm
 import numpy as np
 import einops
 import torch
 import torch.nn as nn
-import torch.nn.utils.prune as prune
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import (
@@ -25,9 +24,11 @@ from transformers import (
     TrainingArguments,
     AutoTokenizer,
     AutoConfig,
-    AutoModelForCausalLM,
-    DataCollatorForLanguageModeling,
+    AutoModelForCausalLM
 )
+
+# --- Ensure fast tokenization and prevent fork deadlocks ---
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 def move_to_device(data: Any, device: torch.device) -> Any:
     """
@@ -51,7 +52,7 @@ def prepare_data(
     split: str = "train",
     streaming: bool = True,
     skip_samples: int = 0,
-) -> DataLoader:
+):
     """
     Load and tokenize a dataset for pruning or evaluation.
 
@@ -76,38 +77,39 @@ def prepare_data(
         if skip_samples > 0:
             dataset = dataset.skip(skip_samples)
         dataset = dataset.take(num_samples)
-        # Convert streaming dataset to a list to allow tokenization.
         dataset = list(dataset)
     else:
         dataset = load_dataset(dataset_name, split=split)
-        # For non-streaming, we assume random access is available.
         dataset = dataset.select(range(skip_samples, skip_samples + num_samples))
 
+    # Now, after DataLoader workers are created, instantiate tokenizer
+    from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     def tokenize_function(examples):
-        # Assumes the field "code" holds the text; adjust as necessary.
-        return tokenizer(
-            examples["answer"],
+        prompt = f"Q: {examples['question']}\nA: {examples['answer']}"
+        question_part = f"Q: {examples['question']}\nA: "
+        tokenized = tokenizer(
+            prompt,
             truncation=True,
             max_length=max_length,
         )
+        question_length = len(tokenizer(question_part, add_special_tokens=False)["input_ids"])
+        tokenized["labels"] = tokenized["input_ids"].copy()
+        tokenized["question_length"] = question_length
+        # Add answer string for BERTScore reference
+        tokenized["answer"] = examples["answer"]
+        return tokenized
 
-    tokenized_dataset = (
-        dataset
-        if isinstance(dataset, list)
-        else dataset.map(tokenize_function, batched=True, remove_columns=dataset.column_names)
-    )
-    # If tokenized_dataset is a list (from streaming), tokenize each sample.
-    if isinstance(tokenized_dataset, list):
-        tokenized_dataset = [tokenize_function(sample) for sample in tokenized_dataset]
+    # Tokenize after DataLoader creation
+    if isinstance(dataset, list):
+        tokenized_dataset = [tokenize_function(sample) for sample in dataset]
+    else:
+        tokenized_dataset = dataset.map(tokenize_function, batched=True, remove_columns=dataset.column_names)
 
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    dataloader = DataLoader(tokenized_dataset, batch_size=batch_size, collate_fn=data_collator)
-    return dataloader
-
+    return tokenized_dataset
 
 @torch.no_grad()
 def evaluate_model(model: nn.Module, dataloader: DataLoader, device: torch.device) -> Dict[str, float]:
@@ -295,25 +297,113 @@ class MaskedTrainer(Trainer):
     """
     Custom Trainer that applies a mask to model parameters every mask_steps steps.
     This ensures pruned neurons remain pruned during training.
+    Optionally adds a differentiable embedding similarity loss (BERTScore-style) to the standard cross-entropy loss.
+    n.b. that embedding_loss_alpha scales the embedding loss.
     """
-    def __init__(self, mask=None, mask_steps=1, **kwargs):
+    def __init__(self, mask=None, mask_steps=1, embedding_loss_alpha=0.0, print_debug: int = None, **kwargs):
         """
         Initialize the MaskedTrainer.
-        
         Args:
             mask: Dictionary mapping parameter names to binary masks
             mask_steps: Apply mask every this many steps
+            embedding_loss_alpha: Weight of embedding similarity loss (0 = off)
             **kwargs: Arguments to pass to the parent Trainer
         """
         super().__init__(**kwargs)
         self.mask = mask
         self.mask_steps = mask_steps
+        self.embedding_loss_alpha = embedding_loss_alpha
+        self.print_debug = print_debug
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        # Standard LM loss
+        outputs = model(**inputs)
+        loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
         
+        # Embedding similarity loss (true BERTScore-style using answer string)
+        emb_loss = 0.0
+        if self.embedding_loss_alpha > 0.0:
+            input_ids = inputs['input_ids']  # (batch, seq)
+            labels = inputs['labels']        # (batch, seq)
+            attention_mask = inputs.get('attention_mask', None)
+            answer_mask = (labels != -100)
+            pad_token_id = model.config.pad_token_id if model.config.pad_token_id is not None else 0
+
+            # Reference: tokenize answer string, pad to max length in batch
+            answer_texts = inputs['answer']  # List[str], field from collator/dataset
+            tokenizer = model.tokenizer if hasattr(model, 'tokenizer') else self.processing_class
+            
+            with torch.no_grad():
+
+                ref_tokenized = tokenizer(answer_texts, return_tensors='pt', padding=True, truncation=True)
+                ref_input_ids = ref_tokenized['input_ids'].to(input_ids.device)
+                ref_attention_mask = ref_tokenized['attention_mask'].to(input_ids.device)
+                ref_outputs = model(input_ids=ref_input_ids, attention_mask=ref_attention_mask, output_hidden_states=True)
+                
+                # Get reference embeddings immediately and detach
+                ref_hidden = ref_outputs.hidden_states[-1].detach()
+                ref_emb_list = []
+                for i in range(ref_input_ids.size(0)):
+                    ref_ans_idx = ref_input_ids[i] != pad_token_id
+                    if ref_ans_idx.sum() == 0:
+                        ref_emb_list.append(ref_hidden[i].mean(dim=0))
+                    else:
+                        ref_emb_list.append(ref_hidden[i][ref_ans_idx].mean(dim=0))
+                ref_emb = torch.stack(ref_emb_list, dim=0)
+                
+                # Clean up reference computation immediately
+                del ref_outputs, ref_hidden, ref_tokenized, ref_input_ids, ref_attention_mask, ref_emb_list
+            gc.collect() # ref_outputs stores tensors with attached computation graphs, so delete
+            
+            # Get predicted answer embeddings (keep gradients for this part)
+            pred_outputs = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
+            pred_hidden = pred_outputs.hidden_states[-1].detach()
+            
+            # Compute predicted embeddings
+            pred_emb_list = []
+            for i in range(input_ids.size(0)):
+                ans_idx = answer_mask[i].nonzero(as_tuple=True)[0]
+                if len(ans_idx) == 0:
+                    pred_emb_list.append(pred_hidden[i].mean(dim=0))
+                else:
+                    pred_emb_list.append(pred_hidden[i][ans_idx].mean(dim=0))
+            pred_emb = torch.stack(pred_emb_list, dim=0)
+            
+            # Compute cosine similarity and loss
+            cosine_sim = torch.nn.functional.cosine_similarity(pred_emb, ref_emb, dim=-1)
+            emb_loss = 1 - cosine_sim.mean()
+            loss = loss + self.embedding_loss_alpha * emb_loss
+            
+            # Clean up embedding computation
+            del pred_outputs, pred_hidden, pred_emb, ref_emb, cosine_sim, pred_emb_list
+            gc.collect()
+        
+        # Clean up main outputs
+        if not return_outputs:
+            del outputs
+            
+        return (loss, outputs) if return_outputs else loss
+
     def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], num_items_in_batch=None) -> torch.Tensor:
-        """Override training_step to apply masks periodically"""
-        # Call the parent's training_step to handle the training logic
-        loss = super().training_step(model, inputs, num_items_in_batch)
+        """Override training_step to apply masks periodically and add embedding loss if enabled. Uses CUDA AMP if available."""
+        use_amp = torch.cuda.is_available()
+
+        # More efficient tensor counting - only count every 10 steps to reduce overhead
+        if self.print_debug is not None:
+            if self.state.global_step % self.print_debug == 0:
+                num_tensors = sum(1 for obj in gc.get_objects() if torch.is_tensor(obj))
+                print(f"Step {self.state.global_step}: {num_tensors} tensors, {torch.cuda.memory_allocated() / 1024 / 1024:.1f} MB allocated")
+
+        model.train()
+        inputs = self._prepare_inputs(inputs)
         
+        if use_amp:
+            from torch.amp import autocast
+            with autocast('cuda', dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16):
+                loss = self.compute_loss(model, inputs)
+        else:
+            loss = self.compute_loss(model, inputs)
+            
         # Apply mask every mask_steps
         if self.state.global_step % self.mask_steps == 0 and self.mask is not None:
             with torch.no_grad():
@@ -321,8 +411,11 @@ class MaskedTrainer(Trainer):
                     if name in self.mask:
                         param.data *= self.mask[name]
         
-        return loss
+        del inputs
+        torch.cuda.empty_cache()
+        loss.backward()
 
+        return loss.detach()
 
 def parse_args() -> argparse.Namespace:
     """
@@ -387,7 +480,6 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-
 def main() -> None:
     
     # args = parse_args()
@@ -407,19 +499,23 @@ def main() -> None:
     ]
     # Common training parameters
     training_params = {
-        "max_length": 1024,
+        "max_length": 512, # 1024
         "batch_size": 8,
-        "accumulations": 8,
+        "accumulations": 4,
         "prune_samples": 1024,
         "train_skip": 1024,
-        "max_steps": 20000,
-        "lr": 5e-5,
+        "max_steps": 7500, # 20000
+        "lr": 1e-4,
         "mask_steps": 1,
-        "eval_steps": 500,
-        "save_steps": 2500,
+        "eval_steps": 500, # 500
+        "save_steps": 2500, # 2500
         "limit_checkpoints": 3,
-        "logging_steps": 5,
-        "warmup_steps": 1000,
+        "logging_steps": 1000,
+        "debug_steps": None, # Int, if not None, print debug (memory) info every debug_steps
+        "warmup_steps": 500, # 1000
+        # Phase-specific step counts
+        "phase1_steps": 2500, # 10000
+        "phase2_steps": 5000, # 10000
     }
 
     # Create logs directory
@@ -458,7 +554,7 @@ def main() -> None:
         'prune_skip': 0,
         'eval': True,
         'eval_skip': 2,
-        'eval_samples': 1024
+        'eval_samples': 512
     }
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -472,12 +568,121 @@ def main() -> None:
         torch_dtype=torch.float32,
         device_map=str(device)
     )
-
-    # ===== STEP 1: PRUNING PHASE =====
+ 
+    # ===== STEP 1: Lasso regularization with embedding similarity loss =====
     
+    # Load tokenizer for training data preparation
+    tokenizer = AutoTokenizer.from_pretrained(args['model_name'])
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    # Load and tokenize training data using prepare_data (returns DataLoader)
+    print("Preparing training data...")
+    train_dataset = prepare_data(
+        args['dataset_name'],
+        args['model_name'],
+        args['max_length'],
+        args['batch_size'],
+        args['batch_size'] * args['max_steps'] * args['accumulations'],
+        split="train",
+        streaming=args['streaming'],
+        skip_samples=args['train_skip'],
+    )
+    
+    # Load evaluation data if needed
+    if args['eval']:
+        print("Preparing evaluation data...")
+        eval_dataset = prepare_data(
+            args['dataset_name'],
+            args['model_name'],
+            args['max_length'],
+            args['batch_size'],
+            args['eval_samples'],
+            split="train",
+            streaming=args['streaming'],
+            skip_samples=args['eval_skip'],
+        )
+    else:
+        eval_dataset = None
+    
+    # Data collator for training
+    from qa_data_collator import QADataCollator
+    data_collator = QADataCollator()
+    
+    # Set up training arguments
+    training_args = TrainingArguments(
+        output_dir=args['output_dir'],
+        max_steps=args['max_steps'] if args['max_steps'] > 0 else -1,
+        per_device_train_batch_size=args['batch_size'],
+        per_device_eval_batch_size=args['batch_size'],
+        gradient_accumulation_steps=args['accumulations'],
+        learning_rate=args['lr'],
+        warmup_steps=args['warmup_steps'],
+        logging_dir=os.path.join(args['output_dir'], "logs"),
+        logging_steps=args['logging_steps'],
+        eval_strategy="steps" if eval_dataset else "no",
+        eval_steps=args['eval_steps'] if eval_dataset else None,
+        save_strategy="steps",
+        save_steps=args['save_steps'],
+        save_total_limit=args['limit_checkpoints'],
+        load_best_model_at_end=eval_dataset is not None,
+        bf16=True,
+        optim="adamw_torch_fused",
+        lr_scheduler_type="cosine",
+        weight_decay=0.00,
+        dataloader_num_workers=1, # With this dataset num_shards=1
+        dataloader_pin_memory=True,
+        dataloader_persistent_workers=True,
+        gradient_checkpointing=True,
+        prediction_loss_only=True
+        # fp16=False,
+    )
+    
+    # Initialize the MaskedTrainer with no mask
+    trainer = MaskedTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        data_collator=data_collator,
+        processing_class=tokenizer,
+        mask=None,
+        mask_steps=args['mask_steps'],
+        embedding_loss_alpha=0.2,  # Enable embedding similarity loss for phase 1
+        print_debug=training_params['debug_steps'],
+    )
+
+    torch.cuda.empty_cache()
+    
+    # === Phase 1: Fine-tune with group lasso regularization and cosine similarity ===
+    print("Phase 1: Fine-tuning with L1 regularization (lasso)...")
+    from l1_regularizer import l1_of_l2_of_mlps
+    lasso_lambda = 5e-3 # You may want to tune this
+    phase1_steps = training_params["phase1_steps"]
+    trainer.args.max_steps = phase1_steps
+    original_compute_loss = trainer.compute_loss
+    def compute_loss_with_l1(model, inputs, return_outputs=False):
+        loss = original_compute_loss(model, inputs, return_outputs)
+        l1_loss = l1_of_l2_of_mlps(model)
+        if isinstance(loss, tuple):
+            loss_val, outputs = loss
+            return loss_val + lasso_lambda * l1_loss, outputs
+        return loss + lasso_lambda * l1_loss
+    trainer.compute_loss = compute_loss_with_l1
+    trainer.train()
+    # Save intermediate model
+    trainer.save_model(os.path.join(args['output_dir'], "phase1_lasso_model"))
+    print("Phase 1 complete. Model saved.\n")
+
+    # ===== STEP 2: Pruning based on attribution scores after regularizing weights =====
+    # Continue fine-tuning with an embedding similarity score to naively ensure alignment
+
+    # Reload model from phase 1 (after lasso regularization)
+    model = AutoModelForCausalLM.from_pretrained(os.path.join(args['output_dir'], "phase1_lasso_model"), torch_dtype=torch.bfloat16, device_map=str(device))
+ 
     # Load pruning data
     print("Preparing pruning data...")
-    pruning_dataloader = prepare_data(
+    pruning_dataset = prepare_data(
         dataset_name=args['dataset_name'],
         model_name=args['model_name'],
         max_length=args['max_length'],
@@ -488,6 +693,8 @@ def main() -> None:
         skip_samples=args['prune_skip']
     )
     
+    pruning_dataloader = DataLoader(pruning_dataset, batch_size=args['batch_size'], collate_fn=data_collator)
+
     # Create mask based on attribution scores
     print("Creating pruning mask based on attribution scores...")
     num_attribution_batches = args['prune_samples'] // args['batch_size']
@@ -508,126 +715,60 @@ def main() -> None:
     # save mask as a torch file
     mask_file = os.path.join(args['output_dir'], "pruning_mask.pt")
     torch.save(mask, mask_file)
-    
-    # ===== STEP 2: TRAINING PHASE =====
-    
-    # Load tokenizer for training data preparation
-    tokenizer = AutoTokenizer.from_pretrained(args['model_name'])
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    # Load training data
-    print("Preparing training data...")
-    if args['streaming']:
-        train_dataset = load_dataset(
-            args['dataset_name'], 
-            split="train", 
-            streaming=True
-        )
-        if args['train_skip'] > 0:
-            train_dataset = train_dataset.skip(args['train_skip'])
-        train_dataset = train_dataset.take(args['batch_size'] * args['max_steps'] * args['accumulations'])
-    else:
-        train_dataset = load_dataset(
-            args['dataset_name'], 
-            split="train"
-        )
-        train_dataset = train_dataset.select(range(args['train_skip'], args['train_skip'] + args['batch_size'] * args['max_steps'] * args['accumulations']))
-    
-    # Tokenize the training dataset
-    def tokenize_function(examples):
-        return tokenizer(
-            examples["answer"],
-            truncation=True,
-            max_length=args['max_length'],
-        )
-    
-    tokenized_train = train_dataset.map(
-        tokenize_function,
-        batched=True,
-        remove_columns=train_dataset.column_names,
-    )
-    
-    # Load evaluation data if needed
-    eval_dataset = None
-    if args['eval']:
-        print("Preparing evaluation data...")
-        if args['streaming']:
-            eval_dataset = load_dataset(
-                args['dataset_name'], 
-                split="train", 
-                streaming=True
-            )
-            if args['eval_skip'] > 0:
-                eval_dataset = eval_dataset.skip(args['eval_skip'])
-            eval_dataset = eval_dataset.take(args['eval_samples'])
-        else:
-            eval_dataset = load_dataset(
-                args['dataset_name'], 
-                split="train" 
-            )
-            eval_dataset = eval_dataset.select(range(args['eval_skip'], args['eval_skip'] + args['eval_samples']))
-        
-        tokenized_eval = eval_dataset.map(
-            tokenize_function,
-            batched=True,
-            remove_columns=eval_dataset.column_names,
-        )
-    else:
-        tokenized_eval = None
-    
-    # Data collator for training
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    
-    # Set up training arguments
-    training_args = TrainingArguments(
-        output_dir=args['output_dir'],
-        max_steps=args['max_steps'] if args['max_steps'] > 0 else -1,
-        per_device_train_batch_size=args['batch_size'],
-        per_device_eval_batch_size=args['batch_size'],
-        gradient_accumulation_steps=args['accumulations'],
-        learning_rate=args['lr'],
-        warmup_steps=args['warmup_steps'],
-        logging_dir=os.path.join(args['output_dir'], "logs"),
-        logging_steps=args['logging_steps'],
-        eval_strategy="steps" if tokenized_eval else "no",
-        eval_steps=args['eval_steps'] if tokenized_eval else None,
-        save_strategy="steps",
-        save_steps=args['save_steps'],
-        save_total_limit=args['limit_checkpoints'],
-        load_best_model_at_end=tokenized_eval is not None,
-        bf16=True if torch.cuda.is_available() else False,
-        optim="adamw_torch_fused",
-        lr_scheduler_type="cosine",
-        weight_decay=0.00,
-    )
-    
-    # Initialize the MaskedTrainer with the mask
+
+    # Setup trainer for phase 2 (pruned model)
     trainer = MaskedTrainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_train,
-        eval_dataset=tokenized_eval,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         data_collator=data_collator,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         mask=mask,
         mask_steps=args['mask_steps'],
+        embedding_loss_alpha=getattr(trainer, 'embedding_loss_alpha', 0.2),
+        print_debug=training_params['debug_steps'],
     )
-    
-    # Train the model while maintaining the pruned structure
-    print("Starting training phase...")
-    trainer.train()
-    
+    phase2_steps = training_params["phase2_steps"]
+    trainer.args.max_steps = phase1_steps + phase2_steps  # total steps
+    trainer.state.global_step = phase1_steps  # continue from step 10k
+    trainer.compute_loss = original_compute_loss  # remove L1 reg
+    trainer.train(resume_from_checkpoint=None)
     # Save the final model
     trainer.save_model(os.path.join(args['output_dir'], "final_model"))
     tokenizer.save_pretrained(os.path.join(args['output_dir'], "final_model"))
     print(f"Final model saved to {os.path.join(args['output_dir'], 'final_model')}")
+
+    # === Compression statistics ===
+    print("Computing compression statistics...")
+    from compression_stats import model_sparsity_stats, model_num_parameters, model_num_bytes
+    # Load original pretrained model for baseline
+    orig_model = AutoModelForCausalLM.from_pretrained(args['model_name'], torch_dtype=torch.bfloat16, device_map=str(device))
+    orig_params = model_num_parameters(orig_model)
+    orig_bytes = model_num_bytes(orig_model)
+    pruned_params = model_num_parameters(model)
+    pruned_bytes = model_num_bytes(model)
+    sparsity = model_sparsity_stats(model)
+    compression_stats = {
+        'orig_num_parameters': orig_params,
+        'orig_num_bytes': orig_bytes,
+        'pruned_num_parameters': pruned_params,
+        'pruned_num_bytes': pruned_bytes,
+        'memory_compression_ratio': pruned_bytes / orig_bytes,
+        'parameter_compression_ratio': pruned_params / orig_params,
+        'fraction_removed': sparsity['fraction_removed'],
+        'layerwise_sparsity': sparsity['layerwise'],
+    }
+    stats_file = os.path.join(args['output_dir'], "compression_stats.json")
+    with open(stats_file, "w") as f:
+        json.dump(compression_stats, f, indent=4)
+    print(f"Compression statistics saved to {stats_file}")
     
     # Evaluate the final model if requested
     if args['eval']:
         print("Evaluating final model...")
         eval_dataloader = DataLoader(
-            tokenized_eval, 
+            eval_dataset, 
             batch_size=args['batch_size'], 
             collate_fn=data_collator
         )
